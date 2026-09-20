@@ -1,5 +1,7 @@
 # AuxCodex
 
+![AuxCodex](https://i.imgur.com/BuCQbJr.jpeg)
+
 O AuxCodex é um aplicativo Windows em WinForms executado na bandeja do sistema. Ele organiza pastas, projetos e sessões e permite configurar a execução de OpenAI e de provedores adicionais por meio de arquivos BAT e templates.
 
 ## Principais recursos
