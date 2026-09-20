@@ -1,0 +1,25 @@
+# Visual Studio / .NET
+.vs/
+bin/
+obj/
+*.user
+*.suo
+
+# Dados locais da aplicação
+config.json
+config.invalid.*.json
+config.json.tmp-*
+AuxCodex.log
+*.log
+Bats/
+TesteManual/config.json
+TesteManual/Bats/
+TesteManual/Resultados/
+
+# Artefatos temporários de testes
+*.tmp
+*.bak
+*.marker
+obj/*harness*/
+obj/MCO*Harness/
+

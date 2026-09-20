@@ -1,0 +1,64 @@
+HOMOLOGAÇÃO MANUAL FINAL - AUXCODEX
+
+Use somente o ambiente de teste e dados fictícios. Para iniciar, execute:
+Iniciar-Teste-Manual.bat
+
+1. Tray e ícone: confirme ícone pequeno, tooltip, clique esquerdo e menu.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+2. Crie uma pasta e um projeto. Em Novo projeto, confira Nova, Renomear e Remover completos e bem posicionados.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+3. Redimensione Novo projeto. Confira tamanho mínimo, coluna de sessões, editor BAT e botões Salvar/Cancelar.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+4. Crie três sessões e alterne entre elas repetidamente. Confira dados e abas corretos, sem duplicações.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+5. Em Provedores secundários, confirme DeepSeek e GLM; cadastre, edite e exclua uma secundária fictícia não utilizada.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+6. Adicione secundárias diferentes às sessões. Confira OpenAI primeiro, secundárias corretas e abas sem duplicação.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+7. Com chaves fictícias, teste ResumeKey local no BAT e Usar contexto OpenAI em uma secundária.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+8. Teste renomear, mover e excluir pastas, projetos e sessões somente nos dados de teste.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+9. Opcional: execute apenas um provedor com BAT fictício e seguro; confira o marcador em TesteManual\Resultados.
+   Resultado: OK / PROBLEMA
+   Observação:
+
+10. Finalize por Sair; confirme que o ícone desaparece e o processo encerra normalmente.
+    Resultado: OK / PROBLEMA
+    Observação:
+
+Não use credenciais, BATs, URLs ou serviços reais durante esta homologação.
+
+Reteste após MCO:23: selecione um BAT existente; confirme caminho e Conteúdo do BAT preenchidos imediatamente e atualização da Chave de resume apenas do provedor atual, quando houver comando resume.
+Reteste após MCO:24: Abrir... carrega BAT existente; cancelar não altera dados; Novo... aceita caminho inexistente; somente Salvar grava fisicamente.
+Reteste após MCO:26: no projeto do menu operacional, use botão direito e valide Editar, Apagar e Mover; cada ação deve atuar no projeto correto, sem apagar BATs, preservando clique esquerdo e execução dos provedores.
+Reteste após MCO:27: em Projeto AuxCodex, clique com botão direito diretamente no nome do projeto e escolha Editar; deve abrir o ItemEditForm correto sem executar OpenAI, BAT ou navegador. Clique esquerdo em OpenAI continua sendo ação operacional distinta.
+Reteste após MCO:28: com uma única sessão sem secundárias, o menu deve mostrar Projeto > OpenAI; ao adicionar secundária ou segunda sessão, o nível da sessão volta a aparecer; ao retornar a uma sessão sem secundárias, ele fica oculto novamente. Botão direito no projeto continua mostrando Editar, Apagar e Mover.
+Reteste após MCO:29: no caso compacto, clique esquerdo em OpenAI executa; clique direito em OpenAI abre Editar/Apagar/Mover do projeto e nunca executa. Com secundária, clique direito em OpenAI ou nela abre a manutenção do projeto; nenhum provedor executa com botão direito.
+Reteste após MCO:31: clique direito em OpenAI, escolha Editar, Apagar e Mover e confirme que o menu fecha sem ObjectDisposedException; repita diretamente no projeto e em uma secundária, além de fechar o menu clicando fora.
+Reteste após MCO:32: confira Pasta do projeto no cadastro/edição; selecionar diretório preenche o campo, cancelar preserva o valor, salvar/reabrir mantém o diretório, projeto legado vazio continua editável e escolher a pasta não modifica BAT.
+Reteste MCO:33: confirme que Pasta do projeto aparece em cada aba imediatamente antes de Conteúdo do BAT, que Selecionar... escolhe uma pasta, que o mesmo valor permanece ao trocar de provedor/sessão e que o campo não contém um caminho .bat.
+Reteste MCO:34: abrir Editar projeto e confirmar visualmente a linha Pasta do projeto com TextBox e Selecionar... imediatamente acima de Conteúdo do BAT; selecionar diretório, trocar abas/sessões, salvar, reabrir e confirmar persistência sem alterar BATs.
+Reteste MCO:35: abrir projeto com BAT existente e confirmar conteúdo visível; alterar Pasta do projeto e Chave de resume observando a prévia imediata; editar resume diretamente no BAT; trocar abas/sessões; cancelar sem gravar; salvar/reabrir; confirmar preservação de linhas extras e informações sensíveis.
+Reteste MCO:36: editar projeto com BAT ausente sem aviso; confirmar conteúdo composto, caminho em Bats, salvar cria a pasta/BAT, cancelar não cria arquivos, nomes de uma/múltiplas sessões seguem a convenção e BATs legados/personalizados permanecem preservados.
+Reteste MCO:38: abrir Provedores e confirmar lista estreita à esquerda (~210 px), painel/editor largo à direita, Nome com largura útil, Template BAT dominante, crescimento correto ao redimensionar e botões sem sobreposição.
+Reteste MCO:39: configurar template OpenAI em Provedores; abrir projeto com BAT ausente; confirmar template, ProjectDirectory e ResumeKey aplicados; testar secundárias, troca de sessões/abas, edição manual, Cancelar, Salvar e persistência final.
+Reteste MCO:40: confirmar BAT gerado com primeira linha d:, segunda linha igual a Pasta do projeto, template do provedor na linha seguinte, ResumeKey aplicada, atualização ao trocar a pasta e preservação de BAT físico existente.
+Reteste MCO:41: verificar AuxCodex.log na pasta do executável; confirmar sobrescrita ao iniciar, eventos da execução atual, níveis/timestamps, ausência de ResumeKeys/templates/BATs completos e registro de encerramento por Sair.
+Reteste MCO:42: confirmar README.md, .gitignore, config.example.json seguro, ausência de config.json/BATs/logs locais no Git, build limpo e publicação; o reteste visual do MCO:41 continua pendente.

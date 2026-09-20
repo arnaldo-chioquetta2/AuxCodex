@@ -1,0 +1,14 @@
+HOMOLOGAÇÃO MANUAL - AUXCODEX
+
+1. Execute Iniciar-Teste-Manual.bat e confirme o ícone, tooltip e clique esquerdo no tray.
+2. Confira Clientes/Projeto Alpha e Internos/Auxiliar; valide a ordem das sessões e provedores.
+3. Abra a edição de Projeto Alpha; redimensione a janela e verifique campos, abas, editor BAT e botões.
+4. Alterne Financeiro, Página inicial e Relatórios várias vezes; confirme que os dados não se misturam.
+5. Adicione/remova uma secundária e confira a criação/remoção da aba sem apagar o BAT.
+6. Teste Usar contexto OpenAI em uma secundária e confira a confirmação e a chave exibida.
+7. Abra Provedores secundários; adicione, edite, renomeie e exclua somente dados de teste.
+8. Teste mover e excluir pastas/projetos de teste; confirme as mensagens e a preservação dos BATs.
+9. Opcionalmente clique em um provedor; confirme o marcador criado em TesteManual\Resultados.
+10. Finalize pelo item Sair e confirme que o ícone desaparece e o processo encerra.
+
+Todos os BATs deste ambiente são fictícios e não executam Codex, serviços externos ou navegador.
