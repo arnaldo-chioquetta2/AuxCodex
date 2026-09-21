@@ -82,7 +82,7 @@ public sealed class SecondaryProvidersForm : Form
     private void RefreshList(Guid? select = null)
     {
         _list.Items.Clear();
-        _list.Items.Add(new Entry(OpenAiViewId, "OpenAI", true, _configuration.OpenAiBatTemplate));
+        _list.Items.Add(new Entry(OpenAiViewId, "OpenAI", true, BatTemplateDefaults.ResolveOpenAi(_configuration, out _)));
         foreach (var definition in _configuration.SecondaryProviders.OrderBy(value => value.Name, StringComparer.CurrentCultureIgnoreCase))
             _list.Items.Add(new Entry(definition.Id, definition.Name, false, definition.BatTemplate, definition));
         if (select.HasValue)

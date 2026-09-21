@@ -94,10 +94,13 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _trayMenu.Items.Add(CreateRootManagementMenuItem());
         _trayMenu.Items.Add(new ToolStripSeparator());
+        var cancelMenuItem = new ToolStripMenuItem("Cancelar");
+        cancelMenuItem.Click += (_, _) => _trayMenu.Close();
+        _trayMenu.Items.Add(cancelMenuItem);
         var exitMenuItem = new ToolStripMenuItem("Sair");
         exitMenuItem.Click += OnExitMenuItemClick;
         _trayMenu.Items.Add(exitMenuItem);
-        _activityLog.Info("Menu da bandeja reconstruído.");
+        _activityLog.TrayMenuRebuilt(Configuration);
     }
 
     protected override void ExitThreadCore()
@@ -176,8 +179,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        if (e.Button == MouseButtons.Left &&
-            (entryTag.EntryType == TrayMenuEntryType.OpenAiAction || entryTag.EntryType == TrayMenuEntryType.SecondaryProviderAction))
+        if (e.Button == MouseButtons.Left && entryTag.IsExecutionEntry)
         {
             OnConfiguredItemClick(menuItem, EventArgs.Empty);
             return;
@@ -248,6 +250,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         contextMenu.Items.Add(renameMenuItem);
         contextMenu.Items.Add(moveMenuItem);
         contextMenu.Items.Add(deleteMenuItem);
+        AddCancelMenuItem(contextMenu);
         contextMenu.Closed += OnFolderContextMenuClosed;
         contextMenu.Show(Cursor.Position);
     }
@@ -281,8 +284,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         contextMenu.Items.Add(editMenuItem);
         contextMenu.Items.Add(deleteMenuItem);
         contextMenu.Items.Add(moveMenuItem);
+        AddCancelMenuItem(contextMenu);
         contextMenu.Closed += OnFolderContextMenuClosed;
         contextMenu.Show(Cursor.Position);
+    }
+
+    private static void AddCancelMenuItem(ContextMenuStrip contextMenu)
+    {
+        contextMenu.Items.Add(new ToolStripSeparator());
+        var cancelMenuItem = new ToolStripMenuItem("Cancelar");
+        cancelMenuItem.Click += (_, _) => contextMenu.Close();
+        contextMenu.Items.Add(cancelMenuItem);
     }
 
     private void OnFolderContextMenuClosed(object? sender, ToolStripDropDownClosedEventArgs e)
@@ -321,7 +333,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        var newFolder = new MenuFolder { Name = dialog.FolderName };
+        var newFolder = new MenuFolder { Name = dialog.FolderName, ProjectDirectory = dialog.ProjectDirectory };
         GetFolderCollection(parentFolder).Add(newFolder);
         TrySaveAndRebuild($"Pasta criada: '{newFolder.Name}'.");
     }
@@ -342,7 +354,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
 
         var parentFolder = _menuTreeService.FindParentFolder(Configuration, folder.Id);
-        using var dialog = new FolderNameForm("Renomear pasta", folder.Name);
+        using var dialog = new FolderNameForm("Editar pasta", folder.Name, folder.ProjectDirectory);
         dialog.Validation = name => _menuTreeService.HasNameConflict(Configuration, parentFolder, name, folder.Id)
             ? "Ja existe uma pasta ou item com esse nome neste local."
             : null;
@@ -353,6 +365,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
 
         folder.Name = dialog.FolderName;
+        folder.ProjectDirectory = dialog.ProjectDirectory;
+        _menuTreeService.SynchronizeInheritedProjectDirectories(Configuration);
         TrySaveAndRebuild($"Pasta renomeada: '{folder.Name}'.");
     }
 
@@ -384,6 +398,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        _activityLog.Info($"Movimentação solicitada: pasta '{folder.Name}', FolderId={folder.Id}.");
         ReportMoveResult(
             _menuTreeService.MoveFolder(
                 Configuration,
@@ -421,6 +436,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        _activityLog.Info($"Movimentação solicitada: projeto '{item.Name}', ProjectId={item.Id}.");
         ReportMoveResult(
             _menuTreeService.MoveItem(
                 Configuration,
@@ -516,15 +532,23 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        if (item.GetSessionsOrdered().Count() > 1)
+        {
+            ShowOperationError("Este item utiliza uma estrutura legada com múltiplas sessões e não pode ser editado nesta interface simplificada.");
+            return;
+        }
+
         OpenItemEditor(item, _menuTreeService.FindItemParent(Configuration, item.Id));
     }
 
     private void OpenItemEditor(MenuItem? item, MenuFolder? parentFolder)
     {
         var isNew = item is null;
-        var openAiTemplate = string.IsNullOrWhiteSpace(Configuration.OpenAiBatTemplate)
-            ? (string.IsNullOrWhiteSpace(Configuration.LastCreatedOpenAiBatContent) ? BatTemplateDefaults.OpenAi : Configuration.LastCreatedOpenAiBatContent)
-            : Configuration.OpenAiBatTemplate;
+        _activityLog.Info(isNew
+            ? "Criação de projeto iniciada."
+            : $"Edição iniciada: projeto '{item!.Name}', ProjectId={item.Id}.");
+        var openAiTemplate = BatTemplateDefaults.ResolveOpenAi(Configuration, out var fallbackTemplateUsed);
+        if (fallbackTemplateUsed) _activityLog.Warning("Template OpenAI não configurado; fallback padrão utilizado.");
         var edits = isNew ? new List<SessionEditData> { new() { Name = "Principal", OpenAiBatContent = _resumeKeyService.RemoveResumeKey(openAiTemplate) } } :
             item!.GetSessionsOrdered().Select(session => new SessionEditData
             {
@@ -538,10 +562,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 }).ToList()
             }).ToList();
         var managedBatDirectory = Path.Combine(Path.GetDirectoryName(_configurationService.ConfigurationFilePath) ?? AppContext.BaseDirectory, "Bats");
-        using var dialog=new ItemEditForm(isNew?"Novo projeto":"Editar projeto",item?.Name??"",item?.GptUrl??"",edits,Configuration.SecondaryProviders,item?.ProjectDirectory??"",openAiTemplate,managedBatDirectory);
+        var inheritedProjectDirectory = _menuTreeService.ResolveNearestProjectDirectory(Configuration, parentFolder);
+        var hasInheritedProjectDirectory = !string.IsNullOrWhiteSpace(inheritedProjectDirectory);
+        var initialProjectDirectory = hasInheritedProjectDirectory
+            ? inheritedProjectDirectory
+            : item?.ProjectDirectory ?? string.Empty;
+        using var dialog=new ItemEditForm(isNew?"Novo projeto":"Editar projeto",item?.Name??"",item?.GptUrl??"",edits,Configuration.SecondaryProviders,initialProjectDirectory,openAiTemplate,managedBatDirectory,hasInheritedProjectDirectory);
         dialog.NewSessionOpenAiBatContentTemplate=openAiTemplate;
         dialog.ValidateProjectName=name=>_menuTreeService.HasNameConflict(Configuration,parentFolder,name,item?.Id)?"Já existe uma pasta ou projeto com esse nome neste local.":null;
-        dialog.SaveHandler=form=>SaveItem(form,item,parentFolder); dialog.ShowDialog();
+        dialog.SaveHandler=form=>SaveItem(form,item,parentFolder);
+        var result = dialog.ShowDialog();
+        if (result != DialogResult.OK) _activityLog.Info(isNew ? "Criação de projeto cancelada." : $"Edição cancelada: ProjectId={item!.Id}.");
     }
 
     private string ReadProviderContent(ProviderLaunchConfiguration provider,string providerName)
@@ -569,7 +600,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             foreach(var session in edited){CaptureBatFile(snapshots,session.OpenAi.BatFilePath);foreach(var p in session.SecondaryProviders)CaptureBatFile(snapshots,p.LaunchConfiguration.BatFilePath);}
             foreach(var session in edited){WriteBatContent(session.OpenAi.BatFilePath,session.OpenAiBatContent);foreach(var p in session.SecondaryProviders)WriteBatContent(p.LaunchConfiguration.BatFilePath,p.BatContent);}
-            item.Name=form.ProjectName;item.GptUrl=form.GptUrl;item.ProjectDirectory=form.ProjectDirectory;item.Sessions=edited.Select(CreateSession).ToList();
+            item.Name=form.ProjectName;item.GptUrl=form.GptUrl;item.ProjectDirectory=_menuTreeService.ResolveEffectiveProjectDirectory(Configuration,parentFolder,form.ProjectDirectory);item.Sessions=edited.Select(CreateSession).ToList();
             if(existingItem is null){GetItemCollection(parentFolder).Add(item);added=true;if(edited.Count>0)Configuration.LastCreatedOpenAiBatContent=_resumeKeyService.RemoveResumeKey(edited[0].OpenAiBatContent);}
             var validationErrors=ConfigurationValidator.Validate(Configuration); if(validationErrors.Count>0) throw new InvalidOperationException(validationErrors[0]);
             _configurationService.Save(Configuration);
@@ -605,7 +636,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (!string.IsNullOrWhiteSpace(parent)) _fileSystem.CreateDirectory(parent);
         var existed = _fileSystem.FileExists(path);
         _batFileService.WriteContent(path, content);
-        _activityLog.Info($"BAT {(existed ? "salvo" : "criado")}: {path}.");
+        _activityLog.Info($"BAT {(existed ? "sobrescrito" : "criado")}: {path}.");
     }
 
     private bool RestoreBatFiles(IEnumerable<BatFileSnapshot> snapshots, out string? error)
@@ -657,6 +688,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        _activityLog.Info($"Remoção solicitada: projeto '{item.Name}', ProjectId={item.Id}.");
         var collection = _menuTreeService.GetItemCollection(Configuration, item.Id);
         if (!collection.Remove(item))
         {
@@ -744,7 +776,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void OnConfiguredItemClick(object? sender, EventArgs e)
     {
-        if(sender is not ToolStripMenuItem menu || menu.Tag is not TrayMenuEntryTag tag || (tag.EntryType!=TrayMenuEntryType.OpenAiAction && tag.EntryType!=TrayMenuEntryType.SecondaryProviderAction))return;
+        if(sender is not ToolStripMenuItem menu || menu.Tag is not TrayMenuEntryTag tag || !tag.IsExecutionEntry)return;
         var project=tag.ProjectId is Guid projectId?_menuTreeService.FindItem(Configuration,projectId):null;
         var session=project?.FindSession(tag.SessionId??Guid.Empty);
         if(project is null||session is null){ShowOperationError("O projeto ou sessão selecionados não foram encontrados.");return;}

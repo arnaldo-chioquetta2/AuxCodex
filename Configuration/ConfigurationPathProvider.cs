@@ -5,6 +5,9 @@ namespace AuxCodex.Configuration;
 /// </summary>
 public sealed class ConfigurationPathProvider
 {
+    /// <summary>
+    /// Retorna a raiz de dados da instância atualmente executada.
+    /// </summary>
     public static string DefaultBaseDirectory => AppContext.BaseDirectory;
     public const string ConfigurationFileName = "config.json";
 

@@ -6,7 +6,9 @@ public sealed class ManagedBatPathService
 
     public ManagedBatPathService(string batDirectory) => _batDirectory = batDirectory;
 
-    public string GetPath(string projectName, string sessionName, string providerName, bool isOpenAi, int sessionCount)
+    public string BaseDirectory => _batDirectory;
+
+    public static string GetFileName(string projectName, string sessionName, string providerName, bool isOpenAi, int sessionCount)
     {
         var project = Sanitize(projectName, "Projeto");
         var session = Sanitize(sessionName, "Sessao");
@@ -14,8 +16,11 @@ public sealed class ManagedBatPathService
         var name = sessionCount == 1
             ? isOpenAi ? project : $"{project} - {provider}"
             : isOpenAi ? $"{project} - {session}" : $"{project} - {session} - {provider}";
-        return Path.Combine(_batDirectory, $"{name}.bat");
+        return $"{name}.bat";
     }
+
+    public string GetPath(string projectName, string sessionName, string providerName, bool isOpenAi, int sessionCount)
+        => Path.Combine(_batDirectory, GetFileName(projectName, sessionName, providerName, isOpenAi, sessionCount));
 
     private static string Sanitize(string? value, string fallback)
     {

@@ -53,7 +53,7 @@ Também é possível indicar uma pasta de configuração isolada:
 AuxCodex.exe --config-dir "C:\Projetos\AuxCodex-Teste"
 ```
 
-Sem `--config-dir`, a configuração é lida na pasta base da execução. O arquivo local `config.json` não deve ser compartilhado.
+Sem `--config-dir`, cada instância usa a própria pasta de execução como raiz de dados: `config.json`, `Bats`, `AuxCodex.log`, `logs` e `backups` ficam nessa árvore. Isso significa que cópias Debug, Release e publicadas podem ter configurações independentes. Instalações intermediárias que usaram `%LOCALAPPDATA%\AuxCodex` podem ser recuperadas automaticamente somente quando a instância atual ainda estiver vazia/default e houver uma única fonte legada válida. Uma configuração atual com dados reais nunca é substituída silenciosamente. Com `--config-dir`, o diretório informado tem precedência e não participa da migração automática. O arquivo local `config.json` não deve ser compartilhado.
 
 ## Configuração
 
@@ -81,7 +81,7 @@ O template é combinado com a pasta do projeto e a ResumeKey da sessão/provedor
 
 ## Log
 
-`AuxCodex.log` é criado na pasta do executável e sobrescrito a cada inicialização. Durante a execução, novos eventos são acrescentados ao mesmo arquivo. O logger foi projetado para não registrar ResumeKeys, chaves de API, tokens ou o conteúdo integral de BATs e templates.
+`AuxCodex.log` fica na pasta do executável e acumula as execuções do mesmo dia. Na mudança de data, o arquivo anterior é arquivado em `logs/AuxCodex-YYYY-MM-DD.log` e um novo log corrente é iniciado. Arquivos arquivados com mais de 30 dias são removidos somente quando seguem esse padrão de nome. O logger foi projetado para não registrar ResumeKeys, chaves de API, tokens ou o conteúdo integral de BATs e templates.
 
 ## Estrutura do projeto
 

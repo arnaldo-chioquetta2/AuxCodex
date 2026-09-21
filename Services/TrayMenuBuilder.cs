@@ -32,10 +32,23 @@ public sealed class TrayMenuBuilder
         {
             result.DropDownItems.Add(new ToolStripMenuItem("(Nenhuma sessão configurada)") { Enabled = false });
         }
-        else if (CanCompactSingleOpenAiSession(sessions))
+        else if (sessions.Count == 1)
         {
             var session = sessions[0];
-            result.DropDownItems.Add(CreateProvider(project, session, "OpenAI", null, session.OpenAi, rightClick));
+            var providers = GetAvailableProviders(config, session);
+            if (providers.Count == 1)
+            {
+                result.Tag = CreateExecutionTag(project, session, providers[0]);
+                result.Enabled = providers[0].IsEnabled;
+            }
+            else if (providers.Count > 1)
+            {
+                foreach (var provider in providers) result.DropDownItems.Add(CreateProvider(project, session, provider, rightClick));
+            }
+            else
+            {
+                result.DropDownItems.Add(new ToolStripMenuItem("(Nenhum provedor configurado)") { Enabled = false });
+            }
         }
         else
         {
@@ -48,25 +61,56 @@ public sealed class TrayMenuBuilder
         return result;
     }
 
-    private static bool CanCompactSingleOpenAiSession(IReadOnlyList<ProjectSession> sessions) =>
-        sessions.Count == 1 &&
-        sessions[0].OpenAi is not null &&
-        !(sessions[0].SecondaryProviders?.Any() ?? false);
-
     private static ToolStripMenuItem CreateSession(AppConfiguration config, MenuItem project, ProjectSession session, MouseEventHandler? rightClick)
     {
-        var result = new ToolStripMenuItem(session.Name) { Tag = new TrayMenuEntryTag(project.Id, session.Id) };
-        result.DropDownItems.Add(CreateProvider(project, session, "OpenAI", null, session.OpenAi, rightClick));
-        var secondary = (session.SecondaryProviders ?? new()).Select(usage => (Usage: usage, Definition: config.SecondaryProviders.FirstOrDefault(def => def.Id == usage.ProviderDefinitionId)))
-            .Where(row => row.Definition is not null).OrderBy(row => row.Definition!.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(row => row.Definition!.Name, StringComparer.CurrentCulture);
-        foreach (var row in secondary) result.DropDownItems.Add(CreateProvider(project, session, row.Definition!.Name, row.Definition.Id, row.Usage.LaunchConfiguration, rightClick));
+        var providers = GetAvailableProviders(config, session);
+        var result = new ToolStripMenuItem(session.Name);
+        if (providers.Count == 1)
+        {
+            result.Tag = CreateExecutionTag(project, session, providers[0], TrayMenuEntryType.Session);
+            result.Enabled = providers[0].IsEnabled;
+        }
+        else
+        {
+            result.Tag = new TrayMenuEntryTag(project.Id, session.Id);
+            foreach (var provider in providers) result.DropDownItems.Add(CreateProvider(project, session, provider, rightClick));
+            if (providers.Count == 0) result.DropDownItems.Add(new ToolStripMenuItem("(Nenhum provedor configurado)") { Enabled = false });
+        }
+        if (rightClick is not null) result.MouseUp += rightClick;
         return result;
     }
 
-    private static ToolStripMenuItem CreateProvider(MenuItem project, ProjectSession session, string name, Guid? definitionId, ProviderLaunchConfiguration? launch, MouseEventHandler? mouseUpHandler)
+    private static ToolStripMenuItem CreateProvider(MenuItem project, ProjectSession session, ProviderAction provider, MouseEventHandler? mouseUpHandler)
     {
-        var item = new ToolStripMenuItem(name) { Enabled = !string.IsNullOrWhiteSpace(launch?.BatFilePath), Tag = new TrayMenuEntryTag(project.Id, session.Id, definitionId) };
+        var entryType = provider.DefinitionId is null ? TrayMenuEntryType.OpenAiAction : TrayMenuEntryType.SecondaryProviderAction;
+        var item = new ToolStripMenuItem(provider.Name) { Enabled = provider.IsEnabled, Tag = CreateExecutionTag(project, session, provider, entryType) };
         if (mouseUpHandler is not null) item.MouseUp += mouseUpHandler;
         return item;
     }
+
+    private static TrayMenuEntryTag CreateExecutionTag(MenuItem project, ProjectSession session, ProviderAction provider, TrayMenuEntryType entryType = TrayMenuEntryType.Item) =>
+        new(project.Id, session.Id, provider.DefinitionId, entryType);
+
+    private static List<ProviderAction> GetAvailableProviders(AppConfiguration config, ProjectSession session)
+    {
+        var providers = new List<ProviderAction>();
+        if (session.OpenAi is not null)
+        {
+            providers.Add(new ProviderAction("OpenAI", null, session.OpenAi, !string.IsNullOrWhiteSpace(session.OpenAi.BatFilePath)));
+        }
+
+        var secondary = (session.SecondaryProviders ?? new())
+            .Select(usage => (Usage: usage, Definition: config.SecondaryProviders.FirstOrDefault(def => def.Id == usage.ProviderDefinitionId)))
+            .Where(row => row.Definition is not null)
+            .OrderBy(row => row.Definition!.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(row => row.Definition!.Name, StringComparer.CurrentCulture);
+        foreach (var row in secondary)
+        {
+            providers.Add(new ProviderAction(row.Definition!.Name, row.Definition.Id, row.Usage.LaunchConfiguration,
+                !string.IsNullOrWhiteSpace(row.Usage.LaunchConfiguration?.BatFilePath)));
+        }
+        return providers;
+    }
+
+    private sealed record ProviderAction(string Name, Guid? DefinitionId, ProviderLaunchConfiguration? Launch, bool IsEnabled);
 }

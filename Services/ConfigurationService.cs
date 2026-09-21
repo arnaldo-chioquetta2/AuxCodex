@@ -77,7 +77,7 @@ public sealed class ConfigurationService
             _fileSystem.WriteAllText(temporaryPath, JsonSerializer.Serialize(configuration, _jsonOptions), System.Text.Encoding.UTF8);
             if (_fileSystem.FileExists(ConfigurationFilePath)) _fileSystem.Replace(temporaryPath, ConfigurationFilePath);
             else _fileSystem.Move(temporaryPath, ConfigurationFilePath);
-            _activityLog?.Info("Configuração salva.");
+            _activityLog?.ConfigurationSaved(configuration);
         }
         catch (Exception exception)
         {
@@ -100,9 +100,13 @@ public sealed class ConfigurationService
         if (config.OpenAiBatTemplate is null) { config.OpenAiBatTemplate = string.Empty; changed = true; }
         if (string.IsNullOrWhiteSpace(config.OpenAiBatTemplate))
         {
-            var template = string.IsNullOrWhiteSpace(config.LastCreatedOpenAiBatContent) ? BatTemplateDefaults.OpenAi : config.LastCreatedOpenAiBatContent;
-            var normalizedTemplate = _resumeKeyService.RemoveResumeKey(template);
-            if (config.OpenAiBatTemplate != normalizedTemplate) { config.OpenAiBatTemplate = normalizedTemplate; changed = true; }
+            // A ausência de template permanece ausência. O fallback é resolvido
+            // em memória para não se passar por uma configuração explícita.
+            if (!string.IsNullOrWhiteSpace(config.LastCreatedOpenAiBatContent))
+            {
+                var normalizedTemplate = _resumeKeyService.RemoveResumeKey(config.LastCreatedOpenAiBatContent);
+                if (config.OpenAiBatTemplate != normalizedTemplate) { config.OpenAiBatTemplate = normalizedTemplate; changed = true; }
+            }
         }
         if (config.Folders is null) { config.Folders = new(); changed = true; }
         if (config.Items is null) { config.Items = new(); changed = true; }
@@ -148,6 +152,7 @@ public sealed class ConfigurationService
         if (folder.Id == Guid.Empty) { folder.Id = Guid.NewGuid(); changed = true; }
         var name = folder.Name?.Trim() ?? string.Empty;
         if (name != folder.Name) { folder.Name = name; changed = true; }
+        if (folder.ProjectDirectory is null) { folder.ProjectDirectory = string.Empty; changed = true; }
         if (folder.Folders is null) { folder.Folders = new(); changed = true; }
         if (folder.Items is null) { folder.Items = new(); changed = true; }
         foreach (var child in folder.Folders) changed |= NormalizeFolder(child, config, deepSeek, migrated);
@@ -307,10 +312,12 @@ public sealed class ConfigurationService
     private void PreserveInvalidConfiguration()
     {
         if (!_fileSystem.FileExists(ConfigurationFilePath)) return;
-        var backup = Path.Combine(_pathProvider.BaseDirectory, $"config.invalid.{DateTime.Now:yyyyMMdd_HHmmss}.json");
+        var backupDirectory = Path.Combine(_pathProvider.BaseDirectory, "backups");
+        _fileSystem.CreateDirectory(backupDirectory);
+        var backup = Path.Combine(backupDirectory, $"config.invalid.{DateTime.Now:yyyyMMdd_HHmmss}.json");
         try
         {
-            if (_fileSystem.FileExists(backup)) backup = Path.Combine(_pathProvider.BaseDirectory, $"config.invalid.{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.json");
+            if (_fileSystem.FileExists(backup)) backup = Path.Combine(backupDirectory, $"config.invalid.{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.json");
             _fileSystem.Copy(ConfigurationFilePath, backup);
             _activityLog?.Warning("Configuração inválida preservada em backup.");
         }

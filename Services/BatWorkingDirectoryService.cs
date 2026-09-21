@@ -73,8 +73,36 @@ public sealed class BatWorkingDirectoryService
         var normalized = projectDirectory.Trim();
         try { normalized = Path.GetFullPath(normalized); }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException) { return content; }
+        if (!TryGetDriveWorkingDirectory(normalized, out var drive, out var directoryWithoutDrive)) return content;
         content = content.Replace("{{PROJECT_DIRECTORY}}", normalized, StringComparison.OrdinalIgnoreCase);
-        return $"d:\r\n{normalized}\r\n{content}";
+        var cdPath = directoryWithoutDrive.Any(char.IsWhiteSpace) ? $"\"{directoryWithoutDrive}\"" : directoryWithoutDrive;
+        return $"{drive}\r\ncd {cdPath}\r\n{content}";
+    }
+
+    public bool SupportsGeneratedProjectDirectory(string? projectDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(projectDirectory)) return true;
+        try
+        {
+            return TryGetDriveWorkingDirectory(Path.GetFullPath(projectDirectory.Trim()), out _, out _);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetDriveWorkingDirectory(string fullPath, out string drive, out string directoryWithoutDrive)
+    {
+        drive = string.Empty;
+        directoryWithoutDrive = string.Empty;
+        var root = Path.GetPathRoot(fullPath);
+        if (string.IsNullOrWhiteSpace(root) || root.Length < 3 || root[1] != ':' || root[2] != '\\') return false;
+
+        drive = root[..2];
+        var remainder = fullPath[root.Length..];
+        directoryWithoutDrive = remainder.Length == 0 ? "\\" : $"\\{remainder}";
+        return true;
     }
 
     private static string RemoveGeneratedDirectoryStructure(string content)

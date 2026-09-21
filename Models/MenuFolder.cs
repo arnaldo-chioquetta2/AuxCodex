@@ -6,6 +6,8 @@ public sealed class MenuFolder
 
     public string Name { get; set; } = string.Empty;
 
+    public string ProjectDirectory { get; set; } = string.Empty;
+
     public List<MenuFolder> Folders { get; set; } = new();
 
     public List<MenuItem> Items { get; set; } = new();

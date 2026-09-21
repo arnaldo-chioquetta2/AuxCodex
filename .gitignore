@@ -9,7 +9,11 @@ obj/
 config.json
 config.invalid.*.json
 config.json.tmp-*
+config.json.pre-migration-*.bak
+config.migration-*.tmp
+backups/
 AuxCodex.log
+logs/
 *.log
 Bats/
 TesteManual/config.json
@@ -22,4 +26,3 @@ TesteManual/Resultados/
 *.marker
 obj/*harness*/
 obj/MCO*Harness/
-
