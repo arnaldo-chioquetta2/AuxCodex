@@ -168,6 +168,9 @@ public sealed class ConfigurationService
         var name = item.Name?.Trim() ?? string.Empty;
         if (name != item.Name) { item.Name = name; changed = true; }
         if (item.GptUrl is null) { item.GptUrl = string.Empty; changed = true; }
+        if (item.CompletionHistory is null) { item.CompletionHistory = new(); changed = true; }
+        if (item.CompletionPercentage < 0) { item.CompletionPercentage = 0; changed = true; }
+        else if (item.CompletionPercentage > 100) { item.CompletionPercentage = 100; changed = true; }
         if (item.Sessions is null) { item.Sessions = new(); changed = true; }
 
         if (item.Sessions.Count == 0 && (item.LegacyOpenAi is not null || item.LegacyDeepSeek is not null))

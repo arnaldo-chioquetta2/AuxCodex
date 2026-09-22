@@ -19,18 +19,22 @@ public partial class ItemEditForm : Form
     private string _projectDirectoryDraft = "";
     private readonly List<ProviderEditor> _editors = new();
     private readonly List<TextBox> _projectDirectoryEditors = new();
-    private readonly bool _projectDirectoryInherited;
+    private readonly List<CompletionHistoryEntry> _completionHistory = new();
 
     public ItemEditForm(string title, string initialName, string initialGptUrl, IReadOnlyList<SessionEditData>? sessions)
-        : this(title, initialName, initialGptUrl, sessions, Array.Empty<SecondaryProviderDefinition>(), string.Empty, string.Empty, string.Empty) { }
+        : this(title, initialName, initialGptUrl, sessions, Array.Empty<SecondaryProviderDefinition>(), string.Empty, string.Empty, string.Empty, 0, null) { }
 
-    public ItemEditForm(string title, string initialName, string initialGptUrl, IReadOnlyList<SessionEditData>? sessions, IReadOnlyList<SecondaryProviderDefinition> catalog, string initialProjectDirectory = "", string initialOpenAiBatTemplate = "", string managedBatDirectory = "", bool projectDirectoryInherited = false)
+    public ItemEditForm(string title, string initialName, string initialGptUrl, IReadOnlyList<SessionEditData>? sessions, IReadOnlyList<SecondaryProviderDefinition> catalog, string initialProjectDirectory = "", string initialOpenAiBatTemplate = "", string managedBatDirectory = "", int initialCompletionPercentage = 0, IReadOnlyList<CompletionHistoryEntry>? initialCompletionHistory = null)
     {
-        _catalog = catalog.ToList(); _sessions = (sessions ?? Array.Empty<SessionEditData>()).Select(x => x.Clone()).ToList(); _projectDirectoryDraft = initialProjectDirectory; _projectDirectoryInherited = projectDirectoryInherited; NewSessionOpenAiBatContentTemplate = initialOpenAiBatTemplate; if (!string.IsNullOrWhiteSpace(managedBatDirectory)) _managedBatPaths = new ManagedBatPathService(managedBatDirectory);
+        _catalog = catalog.ToList(); _sessions = (sessions ?? Array.Empty<SessionEditData>()).Select(x => x.Clone()).ToList(); _projectDirectoryDraft = initialProjectDirectory; NewSessionOpenAiBatContentTemplate = initialOpenAiBatTemplate; if (!string.IsNullOrWhiteSpace(managedBatDirectory)) _managedBatPaths = new ManagedBatPathService(managedBatDirectory);
+        CompletionPercentage = Math.Clamp(initialCompletionPercentage, 0, 100);
+        // MCO:63 - Snapshot do historico JA PERSISTIDO. O editor nao acrescenta nada aqui;
+        // entradas novas so nascem do fluxo de Salvar (MCO:62).
+        _completionHistory = (initialCompletionHistory ?? Array.Empty<CompletionHistoryEntry>()).Select(entry => new CompletionHistoryEntry { ChangedAt = entry.ChangedAt, Percentage = entry.Percentage }).ToList();
         Icon = Utils.ApplicationIconProvider.Icon;
         Text = title; Width = 960; Height = 720; MinimumSize = new Size(930, 620); StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.Sizable; MaximizeBox = true; MinimizeBox = false; AutoScaleMode = AutoScaleMode.Font;
-        BuildLayout(initialName, initialGptUrl, initialProjectDirectory); RefreshSessionList(_sessions.Count > 0 ? 0 : -1);
+        BuildLayout(initialName, initialGptUrl, initialProjectDirectory, CompletionPercentage); RefreshSessionList(_sessions.Count > 0 ? 0 : -1);
     }
 
     private void OnSessionSplitResize(object? sender, EventArgs e)
@@ -48,19 +52,29 @@ public partial class ItemEditForm : Form
     public string ProjectName { get; private set; } = "";
     public string GptUrl { get; private set; } = "";
     public string ProjectDirectory { get; private set; } = "";
+    /// <summary>MCO:62 - Percentual de completude do Item exibido/editado no Form (0 a 100).</summary>
+    public int CompletionPercentage { get; private set; }
     public IReadOnlyList<SessionEditData> EditedSessions { get; private set; } = Array.Empty<SessionEditData>();
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public string NewSessionOpenAiBatContentTemplate { get; set; } = "";
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public Func<string?>? NameValidation { get; set; }
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] internal Func<string, string?>? ValidateProjectName { get; set; }
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] internal Func<ItemEditForm, string?>? SaveHandler { get; set; }
 
-    private void BuildLayout(string initialName, string url, string projectDirectory)
+    private void BuildLayout(string initialName, string url, string projectDirectory, int initialCompletionPercentage)
     {
         var root = _rootLayout; root.Controls.Clear(); root.Dock = DockStyle.Fill; root.Padding = new Padding(14); root.ColumnCount = 1; root.RowCount = 4;
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); Controls.Add(root);
-        var common = _commonLayout; common.Controls.Clear(); common.Dock = DockStyle.Fill; common.ColumnCount = 2; common.RowCount = 2; common.ColumnStyles.Clear(); common.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); common.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); common.RowStyles.Clear(); common.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); common.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 106)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); Controls.Add(root);
+        var common = _commonLayout; common.Controls.Clear(); common.Dock = DockStyle.Fill; common.ColumnCount = 2; common.RowCount = 3; common.ColumnStyles.Clear(); common.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); common.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); common.RowStyles.Clear(); common.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); common.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); common.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         common.Controls.Add(new Label { Text = "Nome do projeto:", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 0, 0); _projectName.Text = initialName; _projectName.Dock = DockStyle.Fill; common.Controls.Add(_projectName, 1, 0);
         common.Controls.Add(new Label { Text = "URL do GPT:", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 0, 1); _url.Text = url; _url.Dock = DockStyle.Fill; common.Controls.Add(_url, 1, 1);
+        common.Controls.Add(new Label { Text = "Completude:", TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill }, 0, 2);
+        var completionRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty, Padding = Padding.Empty };
+        _completion.Minimum = 0; _completion.Maximum = 100; _completion.DecimalPlaces = 0; _completion.Increment = 1; _completion.Width = 70; _completion.Margin = new Padding(0, 3, 4, 3); _completion.Value = Math.Clamp(initialCompletionPercentage, 0, 100);
+        completionRow.Controls.Add(_completion);
+        completionRow.Controls.Add(new Label { Text = "%", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(0, 8, 0, 0) });
+        _historyButton.AutoSize = true; _historyButton.MinimumSize = new Size(96, 26); _historyButton.Margin = new Padding(18, 3, 0, 3); _historyButton.Padding = new Padding(6, 2, 6, 2); _historyButton.Text = "Histórico..."; _historyButton.UseVisualStyleBackColor = true; _historyButton.Click -= OnCompletionHistoryClick; _historyButton.Click += OnCompletionHistoryClick;
+        completionRow.Controls.Add(_historyButton);
+        common.Controls.Add(completionRow, 1, 2);
         root.Controls.Add(common, 0, 0);
         BuildSingleContextProviderLayout(root);
         return;
@@ -152,8 +166,8 @@ public partial class ItemEditForm : Form
         projectDirectoryRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         projectDirectoryRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         projectDirectoryRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var projectDirectoryEditor = new TextBox { Name = "projectDirectoryTextBox", Dock = DockStyle.Fill, Text = _projectDirectoryDraft, ReadOnly = _projectDirectoryInherited, Visible = true };
-        var selectProjectDirectory = new Button { Name = "selectProjectDirectoryButton", Text = "Selecionar...", AutoSize = true, MinimumSize = new Size(100, 30), Margin = new Padding(6, 2, 0, 2), Enabled = !_projectDirectoryInherited, Visible = true };
+        var projectDirectoryEditor = new TextBox { Name = "projectDirectoryTextBox", Dock = DockStyle.Fill, Text = _projectDirectoryDraft, ReadOnly = false, Visible = true };
+        var selectProjectDirectory = new Button { Name = "selectProjectDirectoryButton", Text = "Selecionar...", AutoSize = true, MinimumSize = new Size(100, 30), Margin = new Padding(6, 2, 0, 2), Enabled = true, Visible = true };
         selectProjectDirectory.Click += (_, _) => SelectProjectDirectory(projectDirectoryEditor);
         projectDirectoryEditor.TextChanged += (_, _) => UpdateProjectDirectory(projectDirectoryEditor);
         _projectDirectoryEditors.Add(projectDirectoryEditor);
@@ -233,6 +247,13 @@ public partial class ItemEditForm : Form
         }
     }
 
+    private void OnCompletionHistoryClick(object? sender, EventArgs e)
+    {
+        // MCO:63 - Somente consulta: usa o snapshot persistido, nunca o valor ainda nao salvo.
+        using var dialog = new CompletionHistoryForm(_projectName.Text.Trim(), _completionHistory);
+        dialog.ShowDialog(this);
+    }
+
     private void EnsureTemplateContent(ProviderEditor state)
     {
         if (state.Content.Text.Length == 0 && state.Template.Length > 0)
@@ -310,6 +331,7 @@ public partial class ItemEditForm : Form
             }
         }
         ProjectDirectory = projectDirectory;
+        CompletionPercentage = (int)_completion.Value;
         if(GptUrl.Length>0 && (!Uri.TryCreate(GptUrl,UriKind.Absolute,out var uri)|| (uri.Scheme!="http"&&uri.Scheme!="https"))){_error.Text="Informe uma URL HTTP ou HTTPS válida.";return;}
         foreach(var editor in _editors)
         {

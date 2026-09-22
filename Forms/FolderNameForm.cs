@@ -4,13 +4,19 @@ namespace AuxCodex.Forms;
 
 public partial class FolderNameForm : Form
 {
-    public FolderNameForm(string title, string initialName = "", string initialProjectDirectory = "")
+    private readonly bool _showProjectDirectory;
+    private readonly string _initialProjectDirectory;
+
+    public FolderNameForm(string title, string initialName = "", string initialProjectDirectory = "", bool showProjectDirectory = true)
     {
         InitializeComponent();
         Icon = Utils.ApplicationIconProvider.Icon;
         Text = title;
+        _showProjectDirectory = showProjectDirectory;
+        _initialProjectDirectory = initialProjectDirectory;
         nameTextBox.Text = initialName;
         projectDirectoryTextBox.Text = initialProjectDirectory;
+        ConfigureProjectDirectoryVisibility();
         nameTextBox.SelectAll();
         Resize += OnFormResize;
     }
@@ -38,8 +44,8 @@ public partial class FolderNameForm : Form
         }
 
         var directoryText = projectDirectoryTextBox.Text.Trim();
-        var normalizedDirectory = string.Empty;
-        if (directoryText.Length > 0)
+        var normalizedDirectory = _showProjectDirectory ? string.Empty : _initialProjectDirectory;
+        if (_showProjectDirectory && directoryText.Length > 0)
         {
             try
             {
@@ -82,6 +88,22 @@ public partial class FolderNameForm : Form
     private void OnFormResize(object? sender, EventArgs e)
     {
         projectDirectoryTextBox.Width = Math.Max(80, selectProjectDirectoryButton.Left - projectDirectoryTextBox.Left - 6);
+    }
+
+    private void ConfigureProjectDirectoryVisibility()
+    {
+        if (_showProjectDirectory)
+        {
+            return;
+        }
+
+        projectDirectoryLabel.Visible = false;
+        projectDirectoryTextBox.Visible = false;
+        selectProjectDirectoryButton.Visible = false;
+        validationErrorLabel.Location = new Point(18, 78);
+        cancelButton.Location = new Point(191, 112);
+        saveButton.Location = new Point(281, 112);
+        ClientSize = new Size(384, 159);
     }
 
     private static string NormalizeDirectory(string value)

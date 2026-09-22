@@ -78,3 +78,48 @@ Reteste MCO:55: abrir o menu principal da bandeja e confirmar Cancelar imediatam
 Reteste MCO:56: criar Pasta com diretório físico, criar/editar itens descendentes e confirmar ProjectDirectory preenchido, ReadOnly e Selecionar desabilitado; validar ancestral mais próximo, sincronização ao alterar Pasta, movimentação entre Pastas físicas, retorno ao modo independente sem ancestral físico, BAT efetivo, Cancelar e persistência.
 Reteste MCO:57: criar Item e confirmar ausência da lista Principal, dos botões Nova/Renomear/Remover e do campo Sessão; confirmar botão Adicionar provedor, abas e dados preservados; testar Item OpenAI direto no tray, múltiplos providers em submenu, Item fora de Pasta física editável, ProjectDirectory herdado ReadOnly, Cancelar e persistência; confirmar que Item legado com múltiplas sessões recebe aviso e não sofre edição destrutiva.
 Reteste MCO:58: usar Pasta física com Item herdado; confirmar ProjectDirectory somente leitura, primeira linha do BAT com a unidade, segunda linha iniciada por cd, comando do provider intacto, caminhos com espaços entre aspas, raiz da unidade, provider adicional, ausência de duplicação e persistência após reabrir.
+Reteste MCO:59: em Item independente, alterar Pasta do projeto por digitação/cola e confirmar atualização imediata em todas as abas, troca de unidade, segunda linha com cd, aspas em caminhos com espaços, preservação de linhas manuais/ResumeKeys, atualização por Selecionar..., Cancelar sem gravação e Salvar com persistência final.
+Reteste MCO:60: botão direito em Pasta, confirmar Criar pasta/Criar item, Editar, Renomear, Mover, Apagar e Cancelar; abrir Editar e conferir Nome/Pasta do projeto atuais, Cancelar sem efeito, salvar novo nome e novo diretório real, validar herança ReadOnly dos descendentes e proteção de subpasta física própria; confirmar Renomear apenas o nome, Mover lógico, Cancelar do menu e persistência após reiniciar.
+Reteste MCO:61: criar Item em Pasta com diretório padrão e confirmar preenchimento inicial editável; trocar o diretório do Item por digitação ou Selecionar..., salvar e reabrir confirmando prevalência do valor próprio; alterar diretório da Pasta e confirmar que Itens existentes não mudam; testar Pasta intermediária vazia, ancestral mais próximo apenas para Item novo e movimentação sem reescrever ProjectDirectory.
+Reteste MCO:62: abrir Item e conferir Completude entre 0 e 100; salvar em 0% sem criar entrada de histórico; alterar para 10%, salvar, reabrir e confirmar persistência; salvar de novo em 10% sem nova entrada; evoluir para 11% e 12% conferindo uma única entrada por mudança efetiva; testar redução, 100%, Cancelar e X sem gravação; confirmar percentual único em Item com dois provedores.
+
+Seção MCO:62 - Completude do Item (percentual inteiro de 0 a 100 com histórico por mudança efetiva; a tela de consulta do histórico fica para MCO posterior):
+1. criar Item;
+2. confirmar 0%;
+3. alterar para 10%;
+4. salvar;
+5. reabrir e confirmar 10%;
+6. salvar novamente sem mudar;
+7. alterar para 11%;
+8. salvar;
+9. alterar novamente para 11%;
+10. salvar e confirmar que não há entrada duplicada;
+11. alterar para 12%;
+12. salvar;
+13. testar redução (ex.: 80% para 65%);
+14. testar 100%;
+15. testar Cancelar;
+16. testar Item com dois providers;
+17. confirmar percentual único para o Item.
+Reteste MCO:63: abrir Item com histórico e clicar Histórico... conferindo data/hora amigável, percentuais com sinal %, alteração mais recente primeiro e ausência de qualquer ação de edição; confirmar janela vazia em Item novo ou sem registros; alterar a Completude sem salvar e confirmar que o valor ainda não aparece; salvar e reabrir para ver a nova entrada; salvar de novo sem alterar e confirmar que não duplicou; confirmar que o Histórico nunca modifica o Item.
+
+Seção MCO:63 - Consulta do histórico de completude (somente leitura; sem gráfico nesta etapa; ordenação apenas visual):
+1. abrir Item com histórico;
+2. clicar Histórico...;
+3. conferir datas;
+4. conferir percentuais;
+5. conferir mais recente primeiro;
+6. fechar;
+7. alterar percentual sem salvar;
+8. abrir Histórico;
+9. confirmar que valor não salvo não aparece;
+10. cancelar edição;
+11. reabrir;
+12. alterar percentual e salvar;
+13. reabrir;
+14. confirmar nova entrada;
+15. salvar novamente sem alterar;
+16. confirmar que não duplicou;
+17. testar Item com histórico vazio;
+18. testar Item novo;
+19. confirmar que Histórico nunca modifica Item.

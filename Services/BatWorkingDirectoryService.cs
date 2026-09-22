@@ -18,6 +18,7 @@ public sealed class BatWorkingDirectoryService
         if (string.IsNullOrEmpty(content) || string.IsNullOrWhiteSpace(projectDirectory)) return content ?? string.Empty;
 
         var fullPath = projectDirectory.Trim();
+        if (fullPath.Length < 3 || fullPath[1] != ':' || fullPath[2] != '\\') return content;
         try { fullPath = Path.GetFullPath(fullPath); }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
@@ -62,6 +63,10 @@ public sealed class BatWorkingDirectoryService
 
             match = match.NextMatch();
         }
+
+        var withoutGeneratedPrefix = RemoveGeneratedDirectoryStructure(content);
+        if (!string.Equals(withoutGeneratedPrefix, content, StringComparison.Ordinal))
+            return ApplyGeneratedProjectDirectory(withoutGeneratedPrefix, fullPath);
 
         return content;
     }

@@ -5,6 +5,8 @@ public partial class ItemEditForm
     // Controles estruturais da tela. As páginas das abas continuam dinâmicas.
     private readonly TextBox _projectName = new();
     private readonly TextBox _url = new();
+    private readonly NumericUpDown _completion = new();
+    private readonly Button _historyButton = new();
     private readonly TextBox _sessionName = new();
     private readonly ListBox _sessionList = new();
     private readonly TabControl _tabs = new();

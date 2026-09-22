@@ -16,6 +16,12 @@ public sealed class MenuItem
 
     public string ProjectDirectory { get; set; } = string.Empty;
 
+    /// <summary>MCO:62 - Percentual de completude do Item (0 a 100).</summary>
+    public int CompletionPercentage { get; set; }
+
+    /// <summary>MCO:62 - Historico de mudancas do percentual de completude do Item.</summary>
+    public List<CompletionHistoryEntry> CompletionHistory { get; set; } = new();
+
     public List<ProjectSession> Sessions { get; set; } = new();
 
     public IEnumerable<ProjectSession> GetSessionsOrdered() =>

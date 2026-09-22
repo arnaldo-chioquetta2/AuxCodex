@@ -23,17 +23,6 @@ public sealed class MenuTreeService
         return string.Empty;
     }
 
-    public string ResolveEffectiveProjectDirectory(AppConfiguration configuration, MenuFolder? parentFolder, string? itemProjectDirectory)
-    {
-        var inherited = ResolveNearestProjectDirectory(configuration, parentFolder);
-        return string.IsNullOrWhiteSpace(inherited) ? itemProjectDirectory?.Trim() ?? string.Empty : inherited;
-    }
-
-    public void SynchronizeInheritedProjectDirectories(AppConfiguration configuration)
-    {
-        SynchronizeLevel(configuration, configuration.Folders);
-    }
-
     public IList<MenuFolder> GetFolderSiblings(AppConfiguration configuration, Guid folderId)
     {
         var parent = FindParentFolder(configuration, folderId);
@@ -231,8 +220,6 @@ public sealed class MenuTreeService
         var effectiveTargetId = NormalizeTarget(targetParentFolderId);
         var originalCollection = GetFolderCollection(configuration, FindParentFolder(configuration, sourceFolder.Id)?.Id);
         var destinationCollection = GetFolderCollection(configuration, effectiveTargetId);
-        var previousDirectories = CaptureProjectDirectories(configuration);
-
         try
         {
             if (!originalCollection.Remove(sourceFolder))
@@ -241,14 +228,12 @@ public sealed class MenuTreeService
             }
 
             destinationCollection.Add(sourceFolder);
-            SynchronizeInheritedProjectDirectories(configuration);
             saveConfiguration();
             return MoveResult.Moved();
         }
         catch
         {
             RestoreFolder(sourceFolder, originalCollection, destinationCollection);
-            RestoreProjectDirectories(configuration, previousDirectories);
             return MoveResult.Invalid("Não foi possível salvar a movimentação da pasta.");
         }
     }
@@ -272,8 +257,6 @@ public sealed class MenuTreeService
         var effectiveTargetId = NormalizeTarget(targetParentFolderId);
         var originalCollection = GetItemCollection(configuration, FindItemParent(configuration, sourceItem.Id)?.Id);
         var destinationCollection = GetItemCollection(configuration, effectiveTargetId);
-        var previousDirectories = CaptureProjectDirectories(configuration);
-
         try
         {
             if (!originalCollection.Remove(sourceItem))
@@ -282,78 +265,14 @@ public sealed class MenuTreeService
             }
 
             destinationCollection.Add(sourceItem);
-            SynchronizeInheritedProjectDirectories(configuration);
             saveConfiguration();
             return MoveResult.Moved();
         }
         catch
         {
             RestoreItem(sourceItem, originalCollection, destinationCollection);
-            RestoreProjectDirectories(configuration, previousDirectories);
             return MoveResult.Invalid("Não foi possível salvar a movimentação do projeto.");
         }
-    }
-
-    private static void SynchronizeLevel(AppConfiguration configuration, IEnumerable<MenuFolder>? folders)
-    {
-        foreach (var folder in folders ?? Enumerable.Empty<MenuFolder>())
-        {
-            if (folder is null) continue;
-            var inherited = FindNearestDirectory(configuration, folder);
-            if (!string.IsNullOrWhiteSpace(inherited))
-            {
-                foreach (var item in folder.Items ?? Enumerable.Empty<MenuItem>()) item.ProjectDirectory = inherited;
-            }
-            SynchronizeLevel(configuration, folder.Folders);
-        }
-    }
-
-    private static string FindNearestDirectory(AppConfiguration configuration, MenuFolder startingFolder)
-    {
-        for (var folder = startingFolder; folder is not null; folder = configuration.FindFolderParent(folder.Id))
-        {
-            if (!string.IsNullOrWhiteSpace(folder.ProjectDirectory)) return folder.ProjectDirectory;
-        }
-        return string.Empty;
-    }
-
-    private static Dictionary<Guid, string> CaptureProjectDirectories(AppConfiguration configuration)
-    {
-        var result = new Dictionary<Guid, string>();
-        foreach (var item in configuration.Items ?? Enumerable.Empty<MenuItem>()) result[item.Id] = item.ProjectDirectory;
-        CaptureProjectDirectories(configuration.Folders, result);
-        return result;
-    }
-
-    private static void CaptureProjectDirectories(IEnumerable<MenuFolder>? folders, IDictionary<Guid, string> result)
-    {
-        foreach (var folder in folders ?? Enumerable.Empty<MenuFolder>())
-        {
-            if (folder is null) continue;
-            foreach (var item in folder.Items ?? Enumerable.Empty<MenuItem>()) result[item.Id] = item.ProjectDirectory;
-            CaptureProjectDirectories(folder.Folders, result);
-        }
-    }
-
-    private static void RestoreProjectDirectories(AppConfiguration configuration, IReadOnlyDictionary<Guid, string> values)
-    {
-        foreach (var item in configuration.Items ?? Enumerable.Empty<MenuItem>()) RestoreProjectDirectory(item, values);
-        RestoreProjectDirectories(configuration.Folders, values);
-    }
-
-    private static void RestoreProjectDirectories(IEnumerable<MenuFolder>? folders, IReadOnlyDictionary<Guid, string> values)
-    {
-        foreach (var folder in folders ?? Enumerable.Empty<MenuFolder>())
-        {
-            if (folder is null) continue;
-            foreach (var item in folder.Items ?? Enumerable.Empty<MenuItem>()) RestoreProjectDirectory(item, values);
-            RestoreProjectDirectories(folder.Folders, values);
-        }
-    }
-
-    private static void RestoreProjectDirectory(MenuItem item, IReadOnlyDictionary<Guid, string> values)
-    {
-        if (values.TryGetValue(item.Id, out var directory)) item.ProjectDirectory = directory;
     }
 
     private static Guid? NormalizeTarget(Guid? targetParentFolderId) =>

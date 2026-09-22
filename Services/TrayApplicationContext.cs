@@ -225,6 +225,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         };
         createItemMenuItem.Click += OnCreateItemMenuItemClick;
 
+        var editMenuItem = new ToolStripMenuItem("Editar")
+        {
+            Tag = new TrayMenuEntryTag(folderId, TrayMenuEntryType.Folder)
+        };
+        editMenuItem.Click += OnEditFolderMenuItemClick;
+
         var renameMenuItem = new ToolStripMenuItem("Renomear")
         {
             Tag = new TrayMenuEntryTag(folderId, TrayMenuEntryType.Folder)
@@ -247,6 +253,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         contextMenu.Items.Add(createFolderMenuItem);
         contextMenu.Items.Add(createItemMenuItem);
         contextMenu.Items.Add(new ToolStripSeparator());
+        contextMenu.Items.Add(editMenuItem);
         contextMenu.Items.Add(renameMenuItem);
         contextMenu.Items.Add(moveMenuItem);
         contextMenu.Items.Add(deleteMenuItem);
@@ -354,7 +361,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
 
         var parentFolder = _menuTreeService.FindParentFolder(Configuration, folder.Id);
-        using var dialog = new FolderNameForm("Editar pasta", folder.Name, folder.ProjectDirectory);
+        using var dialog = new FolderNameForm("Renomear pasta", folder.Name, folder.ProjectDirectory, showProjectDirectory: false);
         dialog.Validation = name => _menuTreeService.HasNameConflict(Configuration, parentFolder, name, folder.Id)
             ? "Ja existe uma pasta ou item com esse nome neste local."
             : null;
@@ -365,9 +372,38 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
 
         folder.Name = dialog.FolderName;
-        folder.ProjectDirectory = dialog.ProjectDirectory;
-        _menuTreeService.SynchronizeInheritedProjectDirectories(Configuration);
         TrySaveAndRebuild($"Pasta renomeada: '{folder.Name}'.");
+    }
+
+    private void OnEditFolderMenuItemClick(object? sender, EventArgs e)
+    {
+        if (sender is not ToolStripMenuItem menuItem ||
+            menuItem.Tag is not TrayMenuEntryTag { EntryType: TrayMenuEntryType.Folder } entryTag)
+        {
+            return;
+        }
+
+        var folder = _menuTreeService.FindFolder(Configuration, entryTag.Id);
+        if (folder is null)
+        {
+            ShowOperationError("A pasta selecionada não foi encontrada.");
+            return;
+        }
+
+        var parentFolder = _menuTreeService.FindParentFolder(Configuration, folder.Id);
+        using var dialog = new FolderNameForm("Editar pasta", folder.Name, folder.ProjectDirectory);
+        dialog.Validation = name => _menuTreeService.HasNameConflict(Configuration, parentFolder, name, folder.Id)
+            ? "Já existe uma pasta ou item com esse nome neste local."
+            : null;
+
+        if (dialog.ShowDialog() != DialogResult.OK)
+        {
+            return;
+        }
+
+        folder.Name = dialog.FolderName;
+        folder.ProjectDirectory = dialog.ProjectDirectory;
+        TrySaveAndRebuild($"Pasta editada: '{folder.Name}'.");
     }
 
     private void OnMoveFolderMenuItemClick(object? sender, EventArgs e)
@@ -563,11 +599,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
             }).ToList();
         var managedBatDirectory = Path.Combine(Path.GetDirectoryName(_configurationService.ConfigurationFilePath) ?? AppContext.BaseDirectory, "Bats");
         var inheritedProjectDirectory = _menuTreeService.ResolveNearestProjectDirectory(Configuration, parentFolder);
-        var hasInheritedProjectDirectory = !string.IsNullOrWhiteSpace(inheritedProjectDirectory);
-        var initialProjectDirectory = hasInheritedProjectDirectory
+        var initialProjectDirectory = isNew && !string.IsNullOrWhiteSpace(inheritedProjectDirectory)
             ? inheritedProjectDirectory
             : item?.ProjectDirectory ?? string.Empty;
-        using var dialog=new ItemEditForm(isNew?"Novo projeto":"Editar projeto",item?.Name??"",item?.GptUrl??"",edits,Configuration.SecondaryProviders,initialProjectDirectory,openAiTemplate,managedBatDirectory,hasInheritedProjectDirectory);
+        var initialCompletionPercentage = isNew ? 0 : Math.Clamp(item!.CompletionPercentage, 0, 100);
+        IReadOnlyList<CompletionHistoryEntry>? initialCompletionHistory = isNew ? null : item!.CompletionHistory;
+        using var dialog=new ItemEditForm(isNew?"Novo projeto":"Editar projeto",item?.Name??"",item?.GptUrl??"",edits,Configuration.SecondaryProviders,initialProjectDirectory,openAiTemplate,managedBatDirectory,initialCompletionPercentage,initialCompletionHistory);
         dialog.NewSessionOpenAiBatContentTemplate=openAiTemplate;
         dialog.ValidateProjectName=name=>_menuTreeService.HasNameConflict(Configuration,parentFolder,name,item?.Id)?"Já existe uma pasta ou projeto com esse nome neste local.":null;
         dialog.SaveHandler=form=>SaveItem(form,item,parentFolder);
@@ -595,17 +632,18 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private string? SaveItem(ItemEditForm form,MenuItem? existingItem,MenuFolder? parentFolder)
     {
-        var edited=form.EditedSessions; var item=existingItem??new MenuItem(); var previous=CloneSessions(item.Sessions); var oldName=item.Name;var oldUrl=item.GptUrl;var oldProjectDirectory=item.ProjectDirectory;var oldHistory=Configuration.LastCreatedOpenAiBatContent;var added=false;var snapshots=new List<BatFileSnapshot>();
+        var edited=form.EditedSessions; var item=existingItem??new MenuItem(); var previous=CloneSessions(item.Sessions); var oldName=item.Name;var oldUrl=item.GptUrl;var oldProjectDirectory=item.ProjectDirectory;var oldHistory=Configuration.LastCreatedOpenAiBatContent;var oldCompletion=item.CompletionPercentage;var oldCompletionHistory=CloneCompletionHistory(item.CompletionHistory);var added=false;var snapshots=new List<BatFileSnapshot>();
         try
         {
             foreach(var session in edited){CaptureBatFile(snapshots,session.OpenAi.BatFilePath);foreach(var p in session.SecondaryProviders)CaptureBatFile(snapshots,p.LaunchConfiguration.BatFilePath);}
             foreach(var session in edited){WriteBatContent(session.OpenAi.BatFilePath,session.OpenAiBatContent);foreach(var p in session.SecondaryProviders)WriteBatContent(p.LaunchConfiguration.BatFilePath,p.BatContent);}
-            item.Name=form.ProjectName;item.GptUrl=form.GptUrl;item.ProjectDirectory=_menuTreeService.ResolveEffectiveProjectDirectory(Configuration,parentFolder,form.ProjectDirectory);item.Sessions=edited.Select(CreateSession).ToList();
+            item.Name=form.ProjectName;item.GptUrl=form.GptUrl;item.ProjectDirectory=form.ProjectDirectory;item.Sessions=edited.Select(CreateSession).ToList();
+            ApplyCompletionChange(item,form.CompletionPercentage,oldCompletion);
             if(existingItem is null){GetItemCollection(parentFolder).Add(item);added=true;if(edited.Count>0)Configuration.LastCreatedOpenAiBatContent=_resumeKeyService.RemoveResumeKey(edited[0].OpenAiBatContent);}
             var validationErrors=ConfigurationValidator.Validate(Configuration); if(validationErrors.Count>0) throw new InvalidOperationException(validationErrors[0]);
             _configurationService.Save(Configuration);
         }
-        catch(Exception exception){if(added)GetItemCollection(parentFolder).Remove(item);item.Name=oldName;item.GptUrl=oldUrl;item.ProjectDirectory=oldProjectDirectory;item.Sessions=previous;Configuration.LastCreatedOpenAiBatContent=oldHistory;var rollbackOk=RestoreBatFiles(snapshots,out var rollbackError);var message=exception is InvalidOperationException ? exception.Message : "Não foi possível salvar o projeto ou os arquivos BAT. Verifique os caminhos e tente novamente.";if(!rollbackOk)message+=" A restauração dos arquivos não foi concluída: "+rollbackError;return message;}
+        catch(Exception exception){if(added)GetItemCollection(parentFolder).Remove(item);item.Name=oldName;item.GptUrl=oldUrl;item.ProjectDirectory=oldProjectDirectory;item.Sessions=previous;item.CompletionPercentage=oldCompletion;item.CompletionHistory=oldCompletionHistory;Configuration.LastCreatedOpenAiBatContent=oldHistory;var rollbackOk=RestoreBatFiles(snapshots,out var rollbackError);var message=exception is InvalidOperationException ? exception.Message : "Não foi possível salvar o projeto ou os arquivos BAT. Verifique os caminhos e tente novamente.";if(!rollbackOk)message+=" A restauração dos arquivos não foi concluída: "+rollbackError;return message;}
         _activityLog.Info($"Projeto {(existingItem is null ? "criado" : "editado")}: '{item.Name}', sessões: {edited.Count}.");
         RebuildTrayMenu();return null;
     }
@@ -613,6 +651,18 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private static ProjectSession CreateSession(SessionEditData data)=>new(){Id=data.Id==Guid.Empty?Guid.NewGuid():data.Id,Name=data.Name.Trim(),OpenAiResumeKey=data.OpenAiResumeKey.Trim(),OpenAi=CloneProvider(data.OpenAi),SecondaryProviders=data.SecondaryProviders.Select(p=>new SessionSecondaryProvider{ProviderDefinitionId=p.ProviderDefinitionId,ResumeKey=p.ResumeKey.Trim(),LaunchConfiguration=CloneProvider(p.LaunchConfiguration)}).ToList()};
     private static List<ProjectSession> CloneSessions(IEnumerable<ProjectSession>? sessions)=>(sessions??Enumerable.Empty<ProjectSession>()).Select(session=>new ProjectSession{Id=session.Id,Name=session.Name,OpenAiResumeKey=session.OpenAiResumeKey,OpenAi=CloneProvider(session.OpenAi),SecondaryProviders=(session.SecondaryProviders??new()).Select(p=>new SessionSecondaryProvider{ProviderDefinitionId=p.ProviderDefinitionId,ResumeKey=p.ResumeKey,LaunchConfiguration=CloneProvider(p.LaunchConfiguration)}).ToList()}).ToList();
     private static ProviderLaunchConfiguration CloneProvider(ProviderLaunchConfiguration? provider)=>new(){BatFilePath=provider?.BatFilePath??"",RunAsAdministrator=provider?.RunAsAdministrator??false};
+    // MCO:62 - O percentual de completude pertence ao Item (nao ao provider). Um novo
+    // registro de historico e criado somente quando o Save altera efetivamente o valor.
+    private static List<CompletionHistoryEntry> CloneCompletionHistory(IEnumerable<CompletionHistoryEntry>? history)=>(history??Enumerable.Empty<CompletionHistoryEntry>()).Select(entry=>new CompletionHistoryEntry{ChangedAt=entry.ChangedAt,Percentage=entry.Percentage}).ToList();
+    private static void ApplyCompletionChange(MenuItem item,int newPercentage,int previousPercentage)
+    {
+        var percentage=Math.Clamp(newPercentage,0,100);
+        var previous=Math.Clamp(previousPercentage,0,100);
+        item.CompletionPercentage=percentage;
+        if(percentage==previous)return;
+        item.CompletionHistory??=new List<CompletionHistoryEntry>();
+        item.CompletionHistory.Add(new CompletionHistoryEntry{ChangedAt=DateTime.Now,Percentage=percentage});
+    }
     private void CaptureBatFile(ICollection<BatFileSnapshot> snapshots, string? path)
     {
         if (string.IsNullOrWhiteSpace(path) ||
